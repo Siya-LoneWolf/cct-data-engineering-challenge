@@ -1,0 +1,8 @@
+pandas
+geopandas
+h3
+boto3
+shapely
+pyyaml
+requests
+pytest

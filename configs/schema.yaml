@@ -1,0 +1,9 @@
+required_columns:
+  - index
+  - centroid_lat
+  - centroid_lon
+  - resolution
+  - geometry
+
+thresholds:
+  conformance_score: 95
