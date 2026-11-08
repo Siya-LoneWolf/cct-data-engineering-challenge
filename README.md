@@ -35,7 +35,15 @@ python -m src.extraction.extract_resolution_8
 python -m src.transformation.assign_h3
 ```
 
-Task 5 has an external-data dependency and an ambiguity in the challenge wording (“within 1 minute” of a centroid is not a distance unit). The pipeline deliberately requires the boundary source and a radius to be selected rather than silently claiming that 5 km meets that condition. Obtain an official suburb-boundary GeoJSON, set `ATLANTIS_BOUNDARIES_FILE` to its path (or `ATLANTIS_BOUNDARIES_URL` to a trusted downloadable GeoJSON URL), and set `ATLANTIS_RADIUS_METERS` to the documented interpretation of the requested proximity. Then run:
+Task 5 has an external-data dependency and an ambiguity in the challenge wording (“within 1 minute” of a centroid is not a distance unit). The pipeline deliberately requires the boundary source and a radius to be selected rather than silently claiming that 5 km meets that condition. Obtain an official suburb-boundary GeoJSON, set `ATLANTIS_BOUNDARIES_FILE` to its path (or `ATLANTIS_BOUNDARIES_URL` to a trusted downloadable GeoJSON URL), and set `ATLANTIS_RADIUS_METERS` to the documented interpretation of the requested proximity. For 5.2, An automated download process was implemented to retrieve wind direction and speed data from the City of Cape Town Open Data Portal.
+
+The implementation includes:
+-Retry logic - this was implemented to test and to see just in case the endpoint comes to life 
+-Timeout handling
+-Error logging
+-Controlled failure behaviour
+-During testing the endpoint returned HTTP 404 Client error responses, indicating that the source dataset has been moved or is no longer available via the documented URL. This was also tested directly on the web and also on Postman
+-The retry and failure-handling mechanisms worked as expected. Then run:
 
 ```bash
 python -m src.transformation.filter_atlantis_centroid
