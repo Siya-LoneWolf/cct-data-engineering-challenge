@@ -1,132 +1,65 @@
-# City of Cape Town Data Engineering Code Challenge
+# Data engineering challenge — reproducible run guide
 
-## Candidate
+This repository contains the Data Engineering parts of the City of Cape Town challenge (Tasks 1, 2 and 5). It is not a solution to the Data Science, Analyst or Visualisation tasks.
 
-Siyambonga Ntolo
+## Requirements
 
-## Overview
+- Python 3.10+ (3.11 recommended)
+- Internet access for the public challenge data and wind-data endpoint
+- AWS credentials are not required for the public downloads. S3 Select may require a permitted AWS identity; Task 1 falls back to the public object download if Select is unavailable.
 
-This repository contains my solution to the Data Engineering sections of the City of Cape Town Data Science Unit Code Challenge.
+## Fresh-clone setup
 
-The solution focuses on Data Engineering sections only:
-
-## Installation guides followed
-
-- Create a virtual environment via terminal: python -m venv .venv
-- Activate: .venv\Scripts\activate ```NB: This is Windows OS```
-- Install dependencies: pip install -r requirements.txt
-
-# How to run the project:
-- git clone <repo>
-- cd ds_code_challenge
-- python -m venv .venv
-- pip install -r requirements.txt
-
-### task 1: python src/extraction/extract_resolution_8.py
-### Task 2: python src/transformation/assign_h3.py
-### Task 5.1: python src/transformation/filter_atlantis_centroid.py
-### Task 5.2: python src/anonymisation/anonymise_atlantis.py
-### Task 5.3: python src/anonymisation/anonymise_atlantis.py
-
-## Task 1: Data Extraction
-Source Dataset: city-hex-polygons-8-10.geojson
+```bash
+git clone https://github.com/Siya-LoneWolf/cct-data-engineering-challenge.git
+cd cct-data-engineering-challenge
+python -m venv .venv
+# Windows PowerShell: .venv\\Scripts\\Activate.ps1
+# macOS/Linux: source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+python -m src.extraction.download_data
 ```
-## Please note that city-hex-polygons-8-10.geojson is a bit big for the browser and therefore I used python to download and save this. ```
-Objective:
 
-Extract only H3 Resolution 8 records.
+The download command places challenge inputs under the ignored `data/raw/` directory. Generated results and logs are written under ignored `data/output/` and `logs/` directories. Do not commit raw request data or the manual-review file.
 
-Validation:
+## Run the engineering tasks
 
-- Schema Validation
-- Row Count Validation
-- Conformance Score Calculation
+Commands below are run from the repository root:
 
-Output: data/output/city_hex_resolution_8.geojson
+```bash
+# Task 1: S3 Select (with public-file fallback), schema score and reference validation
+python -m src.extraction.extract_resolution_8
 
-Results:
-- Output Rows: 3,832
-- Reference Rows: 3,832
-- Row Count Match: True
-- Conformance Score: 100%
+# Task 2: generate H3 indices, compare to sr_hex.csv.gz, and enforce the error threshold
+python -m src.transformation.assign_h3
+```
 
-## Task 2: Initial Data Transformation
+Task 5 has an external-data dependency and an ambiguity in the challenge wording (“within 1 minute” of a centroid is not a distance unit). The pipeline deliberately requires the boundary source and a radius to be selected rather than silently claiming that 5 km meets that condition. Obtain an official suburb-boundary GeoJSON, set `ATLANTIS_BOUNDARIES_FILE` to its path (or `ATLANTIS_BOUNDARIES_URL` to a trusted downloadable GeoJSON URL), and set `ATLANTIS_RADIUS_METERS` to the documented interpretation of the requested proximity. Then run:
 
-Source Dataset: sr.csv.gz
+```bash
+python -m src.transformation.filter_atlantis_centroid
+python -m src.enrichment.download_wind_data
+python -m src.enrichment.enrich_wind_data
+python -m src.anonymisation.anonymise_atlantis
+```
 
-Objective:
+The boundary must contain an official suburb-name field; override its name with `ATLANTIS_BOUNDARY_NAME_COLUMN` if needed. The default suburb name match is “Atlantis”. The wind portal endpoint has returned 404 during prior testing. The downloader retries transient errors, fails promptly for permanent client errors, and does not fabricate wind values. If the endpoint remains unavailable, Task 5.2 cannot be represented as completed; restore a valid official source before running the enrichment step.
 
-Assign each service request to an H3 Resolution 8 hexagon based on latitude and longitude coordinates as stated in the CoCT Challenge.
+## Validation and tests
 
-Followed approach:
+```bash
+pytest -q
+```
 
-Generated H3 indices using the H3 Python library.
-Used H3 Resolution 8.
-Records with missing latitude or longitude values were assigned an index value of 0.
-Validated generated results against the supplied reference dataset.
-Validation Results:
+Task 1 writes `data/output/city_hex_resolution_8.geojson` and prints schema conformance, reference comparison, and elapsed time. Task 2 writes `data/output/sr_with_h3.csv` and checks positional row counts and H3 matches against the supplied reference, failing when the configured 1% error threshold is exceeded. The threshold is intentionally strict because H3 assignment is deterministic for valid coordinate pairs.
 
-Records Checked: 941,634
-Failed Matches: 0
-Match Rate: 100%
-Error Threshold:
+Task 5 anonymisation uses H3 resolution 8 (roughly 500 m cell scale) and floors timestamps to six-hour intervals. Removed potentially identifying columns are written to `data/output/manual_review.csv` for restricted human review. That file can contain personal data and must not be published or committed. Review and remove any additional identifying fields before release; H3 and time bucketing reduce precision but do not alone guarantee anonymity.
 
-A maximum acceptable error rate of 1% was selected because H3 index generation is deterministic and should consistently produce identical results for valid coordinates.
+## Configuration and known limits
 
-## Task 5: Further Data Transformations - Atlantis Subsample
-
-followed approach:
--Atlantis-related service requests were identified.
--Associated H3 Level 8 polygons were extracted.
--Polygon geometries were merged.
--A centroid was calculated computationally.
--Service requests within 100 metres of the derived centroid were selected.
--Derived Centroid
--Latitude: -33.614363450307174
--Longitude: 18.48537296729846
-
-Records were filtered using a 5km radius (well, 2km was also fine but 5km had more) around the derived centroid result:
-Subsample Size: 1,750 records 
-
-## 5.2 - Wind Data Enrichment
-An automated download process was implemented to retrieve wind direction and speed data from the City of Cape Town Open Data Portal.
-
-The implementation includes:
--Retry logic - this was implemented to test and to see just in case the endpoint comes to life 
--Timeout handling
--Error logging
--Controlled failure behaviour
--During testing the endpoint returned HTTP 404 Client error responses, indicating that the source dataset has been moved or is no longer available via the documented URL. This was also tested directly on the web and also on Postman
--The retry and failure-handling mechanisms worked as expected.
-
-## 5.3 - Data Anonymisation
-Spatial Anonymisation
-Precise latitude and longitude values were removed and replaced with H3 Resolution 8 indices.
-
-This preserves approximate location accuracy while preventing precise address identification.
-
-Temporal Anonymisation
-Exact timestamps were aggregated into 6-hour buckets.
-
-for emphasizes:
-
-Original	Anonymised
-2020-03-05 09:17	2020-03-05 06:00
-Manual Review
-Potentially sensitive identifiers were extracted into a separate file:
-
-manual_review.csv
-for human review before publication.
-
-Output Files
-atlantis_anonymised.csv
-manual_review.csv
-
-### As per the challenge requirements, the implementation emphasizes:
-- Reproducibility
-- Modularity
-- Validation
-- Logging
-- Data Quality Controls
-- Clean and Maintainable Code
-
+- `configs/schema.yaml` defines Task 1 required properties and the minimum schema conformance score.
+- `configs/data_sources.yaml` lists the public S3 object URLs.
+- Task 5 requires an official boundary dataset not included in the challenge input list and a deliberate interpretation of the proximity wording. No fabricated centroid or unverified boundary URL is provided.
+- Wind enrichment requires the City’s 2020 wind-data file and recognizable timestamp, direction, and speed columns. The implementation uses the latest prior observation within a configured age limit.
+- The challenge requests `AI_log.md`; it records the assistance currently disclosed. Add any further AI prompts, model details, and token counts if applicable. Never invent retrospective token counts.

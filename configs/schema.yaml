@@ -1,9 +1,12 @@
-required_columns:
+required_properties:
   - index
   - centroid_lat
   - centroid_lon
   - resolution
-  - geometry
 
-thresholds:
-  conformance_score: 95
+geometry_types:
+  - Polygon
+  - MultiPolygon
+
+minimum_conformance_score: 95.0
+expected_resolution: 8

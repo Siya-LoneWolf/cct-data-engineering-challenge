@@ -1,0 +1,7 @@
+bucket: cct-ds-code-challenge-input-data
+region: af-south-1
+objects:
+  city-hex-polygons-8-10.geojson: https://cct-ds-code-challenge-input-data.s3.af-south-1.amazonaws.com/city-hex-polygons-8-10.geojson
+  city-hex-polygons-8.geojson: https://cct-ds-code-challenge-input-data.s3.af-south-1.amazonaws.com/city-hex-polygons-8.geojson
+  sr.csv.gz: https://cct-ds-code-challenge-input-data.s3.af-south-1.amazonaws.com/sr.csv.gz
+  sr_hex.csv.gz: https://cct-ds-code-challenge-input-data.s3.af-south-1.amazonaws.com/sr_hex.csv.gz

@@ -1,97 +1,53 @@
+from pathlib import Path
+import logging
+import re
 
-import pandas as pd
 import h3
+import pandas as pd
 
-INPUT_FILE = "data/output/atlantis_subsample.csv"
+from src.extraction.download_data import ROOT
 
-print("Loading data...")
+LOG = logging.getLogger(__name__)
+PII_PATTERN = re.compile(r"name|phone|mobile|email|address|street|contact|identity|\bid\b|reference|notification_number|resident|complainant", re.I)
 
-df = pd.read_csv(INPUT_FILE)
 
-print(f"Records loaded: {len(df):,}")
+def anonymise(frame: pd.DataFrame, timestamp_column: str | None = None):
+    result = frame.copy()
+    latitude = next((c for c in result.columns if c.lower() == "latitude"), None)
+    longitude = next((c for c in result.columns if c.lower() == "longitude"), None)
+    if latitude and longitude:
+        result["anonymised_h3"] = [
+            h3.latlng_to_cell(float(lat), float(lon), 8) if pd.notna(lat) and pd.notna(lon) else None
+            for lat, lon in zip(result[latitude], result[longitude])
+        ]
+        result = result.drop(columns=[latitude, longitude])
+    timestamp_column = timestamp_column or next((c for c in result.columns if c.lower() in {"creation_timestamp", "created_at", "notification_created"}), None)
+    if timestamp_column:
+        timestamps = pd.to_datetime(result[timestamp_column], errors="coerce", utc=True)
+        result["creation_time_bucket"] = timestamps.dt.floor("6h")
+        result = result.drop(columns=[timestamp_column])
+    pii_columns = [c for c in result.columns if PII_PATTERN.search(str(c))]
+    review = result[pii_columns].copy()
+    review.insert(0, "source_row_number", range(1, len(result) + 1))
+    review.insert(1, "review_reason", "Potential direct or indirect identifier; assess and manually redact before publication")
+    result = result.drop(columns=pii_columns)
+    return result, review
 
-# Lets explore anonymisation
 
-def location_to_h3(row):
-    try:
-        return h3.latlng_to_cell(
-            row["latitude"],
-            row["longitude"],
-            8
-        )
-    except:
-        return None
+def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    input_path = ROOT / "data/output/atlantis_wind_enriched.csv"
+    if not input_path.exists():
+        raise FileNotFoundError("Run wind enrichment first; anonymisation must apply to the augmented subsample")
+    data = pd.read_csv(input_path)
+    anonymised, review = anonymise(data)
+    output_dir = ROOT / "data/output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    anonymised.to_csv(output_dir / "atlantis_anonymised.csv", index=False)
+    review.to_csv(output_dir / "manual_review.csv", index=False)
+    LOG.info("Anonymised rows: %d; records for restricted manual review: %d", len(anonymised), len(review))
+    LOG.warning("manual_review.csv may contain personal data; restrict access and do not publish or commit it")
 
-df["anonymised_h3"] = df.apply(
-    location_to_h3,
-    axis=1
-)
 
-# Remove/drop precise coordinates
-df.drop(
-    columns=["latitude", "longitude"],
-    inplace=True,
-    errors="ignore"
-)
-
-# Temporal anonymisation detection
-
-df["creation_timestamp"] = pd.to_datetime(
-    df["creation_timestamp"],
-    errors="coerce"
-)
-
-df["creation_time_bucket"] = (
-    df["creation_timestamp"]
-    .dt.floor("6h")
-)
-
-# Remove exact timestamp
-df.drop(
-    columns=["creation_timestamp"],
-    inplace=True,
-    errors="ignore"
-)
-
-# Now Potential PII fields
-
-potential_pii = [
-    "reference_number",
-    "notification_number"
-]
-
-manual_review_cols = [
-    c for c in potential_pii
-    if c in df.columns
-]
-
-manual_review = df[
-    manual_review_cols
-].copy()
-
-manual_review.to_csv(
-    "data/output/manual_review.csv",
-    index=False
-)
-
-# Remove from anonymised output
-df.drop(
-    columns=manual_review_cols,
-    inplace=True,
-    errors="ignore"
-)
-
-# Now we can Save the anonymized data/output
-
-df.to_csv(
-    "data/output/atlantis_anonymised.csv",
-    index=False
-)
-
-print(
-    "Saved: data/output/atlantis_anonymised.csv"
-)
-
-print(
-    "Saved: data/output/manual_review.csv"
-)
+if __name__ == "__main__":
+    main()

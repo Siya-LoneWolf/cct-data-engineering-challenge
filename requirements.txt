@@ -1,8 +1,9 @@
-pandas
-geopandas
-h3
-boto3
-shapely
-pyyaml
-requests
-pytest
+pandas>=2.0
+geopandas>=0.14
+h3>=4.0
+boto3>=1.28
+shapely>=2.0
+pyyaml>=6.0
+requests>=2.31
+odfpy>=1.4
+pytest>=7.0
